@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Game Night Scheduler</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background-color: #1e1e1e;
+    color: #fff;
+    margin: 0;
+    padding: 20px;
+  }
+  h1, h2 {
+    color: #deb2ff;
+  }
+  .section {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #2a2a2a;
+    border-radius: 10px;
+  }
+  label {
+    display: block;
+    margin: 8px 0 4px;
+  }
+  input[type="checkbox"] {
+    margin-right: 8px;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+  td, th {
+    border: 1px solid #444;
+    padding: 8px;
+    text-align: center;
+    cursor: pointer;
+  }
+  td.available {
+    background-color: #4caf50;
+    color: #fff;
+  }
+  td:hover {
+    background-color: #555;
+  }
+  td:first-child {
+    cursor: default;
+    background: #252525;
+  }
+  button {
+    background-color: #deb2ff;
+    color: #000;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  button:hover {
+    background-color: #c08ee0;
+  }
+  .player-card {
+    background: #333;
+    border-radius: 10px;
+    padding: 10px 15px;
+    margin-bottom: 10px;
+    box-shadow: 0 0 8px rgba(0,0,0,0.4);
+  }
+  .player-card h3 {
+    margin: 0 0 5px 0;
+    color: #deb2ff;
+  }
+</style>
+</head>
+<body>
+<h1>🎮 Game Night Scheduler EST Times</h1>
+
+<div class="section">
+  <h2>Enter Your Name</h2>
+  <input type="text" id="playerName" placeholder="Your Discord name" style="padding:5px; width: 100%;">
+</div>
+
+<div class="section">
+  <h2>1. Vote for Games</h2>
+  <label><input type="checkbox" name="game" value="Peak"> Peak</label>
+  <label><input type="checkbox" name="game" value="Lethal Company"> Lethal Company</label>
+  <label><input type="checkbox" name="game" value="Jackbox"> Jackbox</label>
+  <label><input type="checkbox" name="game" value="Phasmophobia"> Phasmophobia</label>
+  <label><input type="checkbox" name="game" value="Repo"> REPO</label>
+  
+  <label><input type="checkbox" name="game" value="Other"> Other</label>
+</div>
+
+<div class="section" style="border:1px dashed #444;">
+  🕒 All times are in **Eastern Standard Time (Eastcoast, North America)**.
+</div>
+
+
+<div class="section">
+  <h2>2. Select Your Available Times</h2>
+  <table id="availability">
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Mon</th>
+        <th>Tue</th>
+        <th>Wed</th>
+        <th>Thu</th>
+        <th>Fri</th>
+        <th>Sat</th>
+        <th>Sun</th>
+      </tr>
+    </thead>
+    <tbody>
+      <script>
+        for (let hour = 0; hour < 24; hour++) {
+          let nextHour = (hour + 1) % 24;
+          let label = `${hour.toString().padStart(2, '0')}:00 - ${nextHour.toString().padStart(2, '0')}:00`;
+          document.write('<tr>');
+          document.write(`<td>${label}</td>`);
+          for (let day = 0; day < 7; day++) {
+            document.write('<td></td>');
+          }
+          document.write('</tr>');
+        }
+      </script>
+    </tbody>
+  </table>
+</div>
+
+<div class="section">
+  <button id="submitBtn">Submit My Choices</button>
+  <button id="resetBtn">Reset All (Host)</button>
+</div>
+
+<div class="section">
+  <h2>Current Results</h2>
+  <div id="results"></div>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+<script>
+// Firebase config
+const firebaseConfig = {
+  apiKey: "AIzaSyCmGWnF_5TSYgX5E5qhFU0evyBhCS1PvgI",
+  authDomain: "game-night-8ae71.firebaseapp.com",
+  databaseURL: "https://game-night-8ae71-default-rtdb.firebaseio.com",
+  projectId: "game-night-8ae71",
+  storageBucket: "game-night-8ae71.appspot.com",
+  messagingSenderId: "71069508732",
+  appId: "1:71069508732:web:9ae4086e59ab2b9f7795f9"
+};
+
+// Initialize Firebase
+const app = firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// Toggle availability on click
+const table = document.getElementById('availability');
+table.addEventListener('click', (e) => {
+  const cell = e.target.closest('td');
+  if (!cell) return;
+  if (cell.cellIndex === 0) return; // ignore first column
+
+  cell.classList.toggle('available');
+  if (cell.classList.contains('available')) {
+    cell.style.backgroundColor = '#4caf50';
+  } else {
+    cell.style.backgroundColor = '';
+  }
+});
+
+// Submit choices
+const submitBtn = document.getElementById('submitBtn');
+submitBtn.addEventListener('click', () => {
+  const name = document.getElementById('playerName').value.trim();
+  if (!name) {
+    alert("Enter your name first!");
+    return;
+  }
+  const selectedGames = Array.from(document.querySelectorAll('input[name="game"]:checked')).map(g => g.value);
+  const times = [];
+  table.querySelectorAll('tbody tr').forEach((row) => {
+    const timeLabel = row.cells[0].innerText;
+    for (let i = 1; i < row.cells.length; i++) {
+      if (row.cells[i].classList.contains('available')) {
+        times.push({ day: table.rows[0].cells[i].innerText, time: timeLabel });
+      }
+    }
+  });
+
+  db.ref('responses/' + name).set({
+    games: selectedGames,
+    times: times
+  });
+});
+
+// Reset button (host only)
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (confirm("Are you sure you want to reset ALL data?")) {
+    db.ref('responses').set({});
+  }
+});
+
+// Live updates with player cards + heatmap shading
+db.ref('responses').on('value', (snapshot) => {
+  const data = snapshot.val() || {};
+  const resultsDiv = document.getElementById('results');
+  resultsDiv.innerHTML = '';
+
+  // Clear all highlights first
+  table.querySelectorAll('tbody td').forEach(td => {
+    td.classList.remove('available');
+    td.style.backgroundColor = '';
+  });
+
+  // Track slot counts for heatmap
+  const slotCounts = {};
+
+  // Loop through players
+  for (const [player, info] of Object.entries(data)) {
+    // Create card
+    const card = document.createElement('div');
+    card.classList.add('player-card');
+    card.innerHTML = `<h3>${player}</h3>
+                      <p>🎮 Games: ${info.games && info.games.length ? info.games.join(', ') : 'None'}</p>
+                      <p>⏰ Available:</p>
+                      <ul>${info.times.map(t => `<li>${t.day} ${t.time}</li>`).join('')}</ul>`;
+    resultsDiv.appendChild(card);
+
+    // Count their times
+    info.times.forEach(slot => {
+      const key = slot.day + '|' + slot.time;
+      slotCounts[key] = (slotCounts[key] || 0) + 1;
+    });
+  }
+
+  // Apply heatmap to table
+  for (const [key, count] of Object.entries(slotCounts)) {
+    const [day, time] = key.split('|');
+    const dayIndex = Array.from(table.rows[0].cells).findIndex(c => c.innerText === day);
+    table.querySelectorAll('tbody tr').forEach(row => {
+      if (row.cells[0].innerText === time && dayIndex > 0) {
+        const cell = row.cells[dayIndex];
+        cell.classList.add('available');
+        const intensity = Math.min(0.2 + count * 0.15, 1);
+        cell.style.backgroundColor = `rgba(76, 175, 80, ${intensity})`;
+      }
+    });
+  }
+});
+</script>
+</body>
+</html>
